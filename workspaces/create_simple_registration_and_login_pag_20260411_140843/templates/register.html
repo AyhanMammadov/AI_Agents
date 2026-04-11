@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Регистрация</h2>
+<form method="post">
+    <label>Имя:<br>
+        <input type="text" name="name" value="{{ request.form.name }}">
+        {% if errors.name %}<span class="error">{{ errors.name }}</span>{% endif %}
+    </label><br>
+    <label>Email:<br>
+        <input type="email" name="email" value="{{ request.form.email }}">
+        {% if errors.email %}<span class="error">{{ errors.email }}</span>{% endif %}
+    </label><br>
+    <label>Пароль:<br>
+        <input type="password" name="password">
+        {% if errors.password %}<span class="error">{{ errors.password }}</span>{% endif %}
+    </label><br>
+    <label>Подтверждение пароля:<br>
+        <input type="password" name="confirm">
+        {% if errors.confirm %}<span class="error">{{ errors.confirm }}</span>{% endif %}
+    </label><br>
+    <button type="submit">Зарегистрироваться</button>
+</form>
+<a href="{{ url_for('login') }}">Уже есть аккаунт? Войти</a>
+{% endblock %}
