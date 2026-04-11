@@ -2,6 +2,8 @@
 venv/
 __pycache__/
 *.pyc
-users.db
+*.db
 workspaces/
 node_modules/
+dist/
+build/
