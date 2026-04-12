@@ -108,7 +108,7 @@ def login(payload: LoginRequest):
     }
 
 
-def backend_agent(state) -> Artifact:
+def senior_backend_agent(state) -> Artifact:
     payload = _extract_backend_input(state)
 
     try:
