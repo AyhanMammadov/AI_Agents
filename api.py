@@ -25,6 +25,13 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/debug-api")
+def debug_api():
+    return {
+        "version": "api_v2_bot_webhook",
+        "uses": "telegram.Bot",
+    }
+
 @app.post("/run")
 def run_task(payload: TaskRequest) -> dict[str, Any]:
     task = payload.task.strip()
