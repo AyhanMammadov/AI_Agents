@@ -48,49 +48,61 @@ async def telegram_webhook(req: Request) -> dict[str, Any]:
     if telegram_bot is None:
         raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN not configured")
 
-    data = await req.json()
-    update = Update.de_json(data, telegram_bot)
+    try:
+        data = await req.json()
+        update = Update.de_json(data, telegram_bot)
 
-    if update.message and update.message.text:
-        user_text = update.message.text
-        result = run_system(user_text)
+        if update.message and update.message.text:
+            user_text = update.message.text
 
-        reply = "Произошла ошибка"
+            try:
+                result = run_system(user_text)
+            except Exception as e:
+                await telegram_bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=f"Ошибка внутри системы: {str(e)[:3500]}",
+                )
+                return {"ok": True}
 
-        mode = result.get("mode")
+            reply = "Произошла ошибка"
 
-        if mode in {"simple_answer", "business_task"}:
-            reply = result.get("answer", "Пустой ответ")
+            mode = result.get("mode")
 
-        elif mode == "build_project":
-            workspace = result.get("workspace")
-            project_type = result.get("project_type")
-            pipeline_error = result.get("pipeline_error")
+            if mode in {"simple_answer", "business_task"}:
+                reply = result.get("answer", "Пустой ответ")
 
-            if pipeline_error:
-                reply = f"Проект не собрался.\nОшибка: {pipeline_error}"
-            else:
+            elif mode == "build_project":
+                workspace = result.get("workspace")
+                project_type = result.get("project_type")
+                pipeline_error = result.get("pipeline_error")
+
+                if pipeline_error:
+                    reply = f"Проект не собрался.\nОшибка: {pipeline_error}"
+                else:
+                    reply = (
+                        "Проект обработан.\n"
+                        f"Тип: {project_type}\n"
+                        f"Workspace: {workspace}"
+                    )
+
+            elif mode == "status_request":
+                workspace = result.get("workspace")
+                project_type = result.get("project_type")
                 reply = (
-                    "Проект обработан.\n"
+                    "Статус последнего результата:\n"
                     f"Тип: {project_type}\n"
                     f"Workspace: {workspace}"
                 )
 
-        elif mode == "status_request":
-            workspace = result.get("workspace")
-            project_type = result.get("project_type")
-            reply = (
-                "Статус последнего результата:\n"
-                f"Тип: {project_type}\n"
-                f"Workspace: {workspace}"
+            elif result.get("error"):
+                reply = f"Ошибка: {result.get('error')}"
+
+            await telegram_bot.send_message(
+                chat_id=update.message.chat_id,
+                text=reply[:4000],
             )
 
-        elif result.get("error"):
-            reply = f"Ошибка: {result.get('error')}"
-
-        await telegram_bot.send_message(
-            chat_id=update.message.chat_id,
-            text=reply[:4000],
-        )
+    except Exception as e:
+        print(f"WEBHOOK ERROR: {e}")
 
     return {"ok": True}
