@@ -1,3 +1,7 @@
+import os
+import datetime
+from typing import Any
+
 from app.core.router import build_route_plan
 from app.core.state_store import ProjectState
 from app.core.executor import Executor, ExecutionError
@@ -5,10 +9,6 @@ from app.agents.registry import AGENT_REGISTRY
 from app.agents.intent_router import ai_intent_router
 from app.core.runtime import apply_generated_code
 from app.core.auto_run import auto_run_project
-
-import os
-import datetime
-from typing import Any
 
 
 def create_workspace(task: str) -> str:
@@ -58,7 +58,7 @@ def print_user_result(run_result: dict[str, Any]) -> None:
             print(f"- {err}")
 
 
-def run_system(task: str):
+def run_system(task: str) -> dict[str, Any]:
     task = task.strip()
 
     if not task:
@@ -70,9 +70,6 @@ def run_system(task: str):
     print("\n🚀 START SYSTEM")
     print(f"Task: {task}")
 
-    # =========================
-    # STEP 1: AI INTENT ROUTER
-    # =========================
     intent_result = ai_intent_router(task)
 
     print("\n🧠 INTENT ROUTER:")
@@ -96,9 +93,6 @@ def run_system(task: str):
             "confidence": intent_result.get("confidence"),
         }
 
-    # =========================
-    # STEP 2: CREATE WORKSPACE
-    # =========================
     workspace = create_workspace(task)
 
     state = ProjectState(
@@ -106,9 +100,6 @@ def run_system(task: str):
         workspace=workspace,
     )
 
-    # =========================
-    # STEP 3: BUILD ROUTE PLAN
-    # =========================
     route = build_route_plan(task)
     state.project_type = route.project_type.value
 
@@ -116,44 +107,42 @@ def run_system(task: str):
     print("🧭 WORKFLOW:", [step.agent.value for step in route.tasks])
 
     executor = Executor(AGENT_REGISTRY)
+    pipeline_error = None
 
     try:
-        # =========================
-        # STEP 4: RUN AGENTS
-        # =========================
         for step in route.tasks:
             executor.run_agent(state, step.agent)
 
-        # =========================
-        # STEP 5: WRITE FILES
-        # =========================
         apply_generated_code(state)
 
-        # =========================
-        # STEP 6: AUTO RUN PROJECT
-        # =========================
         run_result = auto_run_project(state)
         state.auto_run_result = run_result
 
         print("\n🚀 AUTO RUN RESULT:")
         print(run_result)
 
-        # =========================
-        # STEP 7: SHOW USER LINKS
-        # =========================
         print_user_result(run_result)
 
     except ExecutionError as e:
-        print(f"\n⛔ PIPELINE STOPPED: {e}")
+        pipeline_error = str(e)
+        print(f"\n⛔ PIPELINE STOPPED: {pipeline_error}")
 
     except Exception as e:
-        print(f"\n💥 UNEXPECTED ERROR: {e}")
+        pipeline_error = f"Unexpected error: {str(e)}"
+        print(f"\n💥 UNEXPECTED ERROR: {pipeline_error}")
 
-    finally:
-        print("\n🎯 FINAL STATE:")
-        print(state.snapshot())
+    snapshot = state.snapshot()
 
-    return state
+    if pipeline_error:
+        snapshot["ok"] = False
+        snapshot["pipeline_error"] = pipeline_error
+    else:
+        snapshot["ok"] = True
+
+    print("\n🎯 FINAL STATE:")
+    print(snapshot)
+
+    return snapshot
 
 
 if __name__ == "__main__":
@@ -162,4 +151,6 @@ if __name__ == "__main__":
     if not user_task:
         print("Пустая задача")
     else:
-        run_system(user_task)
+        result = run_system(user_task)
+        print("\nFINAL RESULT:\n")
+        print(result)

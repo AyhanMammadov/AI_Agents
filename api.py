@@ -1,6 +1,7 @@
+from typing import Any
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Any
 
 from main import run_system
 
@@ -24,14 +25,4 @@ def run_task(payload: TaskRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Task is empty")
 
     result = run_system(task)
-
-    if hasattr(result, "snapshot"):
-        return {
-            "ok": True,
-            "state": result.snapshot(),
-        }
-
-    return {
-        "ok": True,
-        "result": result,
-    }
+    return result
