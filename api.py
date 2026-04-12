@@ -3,8 +3,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from telegram import Update
-from telegram.ext import ApplicationBuilder
+from telegram import Update, Bot
 
 from main import run_system
 
@@ -12,9 +11,9 @@ app = FastAPI(title="AI Agents API")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-telegram_app = None
+telegram_bot = None
 if TELEGRAM_BOT_TOKEN:
-    telegram_app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    telegram_bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 
 class TaskRequest(BaseModel):
@@ -39,11 +38,11 @@ def run_task(payload: TaskRequest) -> dict[str, Any]:
 
 @app.post("/webhook")
 async def telegram_webhook(req: Request) -> dict[str, Any]:
-    if telegram_app is None:
+    if telegram_bot is None:
         raise HTTPException(status_code=500, detail="TELEGRAM_BOT_TOKEN not configured")
 
     data = await req.json()
-    update = Update.de_json(data, telegram_app.bot)
+    update = Update.de_json(data, telegram_bot)
 
     if update.message and update.message.text:
         user_text = update.message.text
@@ -82,7 +81,7 @@ async def telegram_webhook(req: Request) -> dict[str, Any]:
         elif result.get("error"):
             reply = f"Ошибка: {result.get('error')}"
 
-        await telegram_app.bot.send_message(
+        await telegram_bot.send_message(
             chat_id=update.message.chat_id,
             text=reply[:4000],
         )
