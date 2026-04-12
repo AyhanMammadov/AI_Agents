@@ -1,8 +1,7 @@
 import json
 from openai import OpenAI
 
-from app.config import OPENAI_API_KEY, CHAT_MODEL
-from app.core.schemas import Artifact
+from app.config import OPENAI_API_KEY, STRONG_MODEL
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -33,18 +32,27 @@ Rules:
   - content
 - Never return explanations outside JSON
 - For FastAPI projects, include at minimum:
-  - backend/main.py
-  - backend/requirements.txt
+  - main.py
+  - requirements.txt
 
-If the task is unclear, still return a minimal valid backend scaffold.
+If the task is unclear, still return a minimal valid FastAPI backend scaffold.
+
+Important:
+- paths must be exactly:
+  - main.py
+  - requirements.txt
+- do not prefix paths with backend/
+- do not wrap files in extra folders
 """
 
 
 def _extract_backend_input(state) -> dict:
+    artifacts_dict = getattr(state, "artifacts", {}) or {}
+
     return {
         "task": state.task,
         "project_type": getattr(state, "project_type", None),
-        "artifacts": [artifact.ref for artifact in getattr(state, "artifacts", [])],
+        "artifacts": list(artifacts_dict.keys()),
         "backend_retry_feedback": getattr(state, "backend_retry_feedback", None),
     }
 
@@ -79,7 +87,7 @@ def _minimal_fallback_backend() -> dict:
     return {
         "files": [
             {
-                "path": "backend/main.py",
+                "path": "main.py",
                 "content": '''from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -101,19 +109,19 @@ def login(payload: LoginRequest):
 ''',
             },
             {
-                "path": "backend/requirements.txt",
+                "path": "requirements.txt",
                 "content": "fastapi\nuvicorn\npydantic\n",
             },
         ]
     }
 
 
-def senior_backend_agent(state) -> Artifact:
+def senior_backend_agent(state) -> dict:
     payload = _extract_backend_input(state)
 
     try:
         response = client.chat.completions.create(
-            model=CHAT_MODEL,
+            model=STRONG_MODEL,
             messages=[
                 {"role": "system", "content": BACKEND_SYSTEM_PROMPT},
                 {
@@ -130,16 +138,13 @@ def senior_backend_agent(state) -> Artifact:
 
     except Exception as e:
         fallback = _minimal_fallback_backend()
-        return Artifact(
-            ref="backend_code",
-            data={
-                **fallback,
-                "contract_ok": True,
-                "contract_errors": [],
-                "agent_error": str(e),
-                "fallback_used": True,
-            },
-        )
+        return {
+            **fallback,
+            "contract_ok": True,
+            "contract_errors": [],
+            "agent_error": str(e),
+            "fallback_used": True,
+        }
 
     contract_ok, contract_errors = _validate_backend_result(parsed)
 
@@ -147,11 +152,8 @@ def senior_backend_agent(state) -> Artifact:
         parsed = _minimal_fallback_backend()
         contract_ok, contract_errors = _validate_backend_result(parsed)
 
-    return Artifact(
-        ref="backend_code",
-        data={
-            **parsed,
-            "contract_ok": contract_ok,
-            "contract_errors": contract_errors,
-        },
-    )
+    return {
+        **parsed,
+        "contract_ok": contract_ok,
+        "contract_errors": contract_errors,
+    }

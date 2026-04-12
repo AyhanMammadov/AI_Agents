@@ -80,8 +80,7 @@ def architect_wrapper(state):
 def backend_wrapper(state):
     from app.core.backend_contract import validate_backend_artifact
 
-    context = build_agent_context(state)
-    result = senior_backend_agent(context)
+    result = senior_backend_agent(state)
 
     check = validate_backend_artifact(result)
 

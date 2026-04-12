@@ -47,7 +47,7 @@ def senior_frontend_agent(context: dict) -> dict:
 
     try:
         response = client.chat.completions.create(
-            model=CHAT_MODEL,
+            model=STRONG_MODEL,
             messages=[
                 {"role": "system", "content": SENIOR_FRONTEND_SYSTEM_PROMPT},
                 {

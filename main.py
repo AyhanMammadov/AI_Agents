@@ -1,61 +1,92 @@
-import os
-import datetime
+import json
 from typing import Any
 
-from app.core.router import build_route_plan
-from app.core.state_store import ProjectState
-from app.core.executor import Executor, ExecutionError
-from app.agents.registry import AGENT_REGISTRY
+from openai import OpenAI
+
+from app.config import OPENAI_API_KEY, CHAT_MODEL
 from app.agents.intent_router import ai_intent_router
-from app.core.runtime import apply_generated_code
-from app.core.auto_run import auto_run_project
+from app.orchestrator import run_orchestrator
+from app.core.session_store import save_last_result, get_last_result
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 
-def create_workspace(task: str) -> str:
-    safe_name = task.replace(" ", "_")[:30]
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = f"workspaces/{safe_name}_{timestamp}"
-    os.makedirs(path, exist_ok=True)
-    return path
+def _chat_answer(system_prompt: str, user_text: str) -> str:
+    response = client.chat.completions.create(
+        model=CHAT_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_text},
+        ],
+        temperature=0.2,
+    )
+    return (response.choices[0].message.content or "").strip()
 
 
-def print_user_result(run_result: dict[str, Any]) -> None:
-    print("\n🌐 RESULT FOR USER:")
+def handle_simple_answer(task: str) -> dict[str, Any]:
+    answer = _chat_answer(
+        system_prompt=(
+            "Ты полезный AI ассистент. "
+            "Отвечай коротко, понятно и без воды."
+        ),
+        user_text=task,
+    )
+    return {
+        "ok": True,
+        "mode": "simple_answer",
+        "answer": answer,
+    }
 
-    if not isinstance(run_result, dict):
-        print("Run result is invalid")
-        return
 
-    frontend = run_result.get("frontend") or {}
-    backend = run_result.get("backend") or {}
-    health = run_result.get("health") or {}
-    errors = run_result.get("errors") or []
+def handle_business_task(task: str) -> dict[str, Any]:
+    answer = _chat_answer(
+        system_prompt=(
+            "Ты senior product manager и business analyst. "
+            "Верни результат на русском языке в формате:\n"
+            "1. Краткое понимание\n"
+            "2. User Story\n"
+            "3. Acceptance Criteria\n"
+            "4. Tasks\n"
+            "5. Task Description\n"
+            "Пиши чётко и без воды."
+        ),
+        user_text=task,
+    )
+    return {
+        "ok": True,
+        "mode": "business_task",
+        "answer": answer,
+    }
 
-    if frontend.get("url"):
-        print(f"Frontend: {frontend['url']}")
 
-    if backend.get("url"):
-        print(f"Backend: {backend['url']}")
+def handle_build_project(task: str) -> dict[str, Any]:
+    result = run_orchestrator(task)
+    result["mode"] = "build_project"
+    save_last_result(result)
+    return result
 
-    if backend.get("health_url"):
-        print(f"Health URL: {backend['health_url']}")
 
-    if backend and not backend.get("ok"):
-        print("Backend start: FAILED")
-        if backend.get("stderr_log"):
-            print(f"Backend stderr log: {backend['stderr_log']}")
-        if backend.get("stdout_log"):
-            print(f"Backend stdout log: {backend['stdout_log']}")
+def handle_status_request() -> dict[str, Any]:
+    last_result = get_last_result()
 
-    if health.get("ok") is True:
-        print("Health: OK")
-    elif health:
-        print("Health: FAILED")
+    if not last_result:
+        return {
+            "ok": False,
+            "mode": "status_request",
+            "error": "Пока нет последнего проекта или результата.",
+        }
 
-    if errors:
-        print("Errors:")
-        for err in errors:
-            print(f"- {err}")
+    return {
+        "ok": True,
+        "mode": "status_request",
+        "task": last_result.get("task"),
+        "project_type": last_result.get("project_type"),
+        "workspace": last_result.get("workspace"),
+        "artifacts": last_result.get("artifacts"),
+        "history": last_result.get("history"),
+        "auto_run_result": last_result.get("auto_run_result"),
+        "pipeline_error": last_result.get("pipeline_error"),
+    }
 
 
 def run_system(task: str) -> dict[str, Any]:
@@ -67,82 +98,58 @@ def run_system(task: str) -> dict[str, Any]:
             "error": "Пустая задача",
         }
 
-    print("\n🚀 START SYSTEM")
+    print("\nSTART SYSTEM")
     print(f"Task: {task}")
 
     intent_result = ai_intent_router(task)
 
-    print("\n🧠 INTENT ROUTER:")
+    print("\nINTENT ROUTER:")
     print(intent_result)
 
     if intent_result.get("error"):
-        print("\n⚠️ INTENT ROUTER FAILED")
-        print(intent_result.get("error"))
-        print("По умолчанию продолжаем как build_project")
-
-    elif intent_result.get("intent") != "build_project":
-        print("\n⛔ BUILD PIPELINE NOT STARTED")
-        print(f"Detected intent: {intent_result.get('intent')}")
-        print(f"Reason: {intent_result.get('reason')}")
-        print(f"Confidence: {intent_result.get('confidence')}")
         return {
-            "ok": True,
-            "intent_only": True,
-            "intent": intent_result.get("intent"),
-            "reason": intent_result.get("reason"),
-            "confidence": intent_result.get("confidence"),
+            "ok": False,
+            "error": intent_result.get("error"),
+            "mode": "routing_failed",
         }
 
-    workspace = create_workspace(task)
+    mode = intent_result.get("intent")
 
-    state = ProjectState(
-        task=task,
-        workspace=workspace,
-    )
+    if mode == "simple_answer":
+        print("\nMODE: SIMPLE ANSWER")
+        return handle_simple_answer(task)
 
-    route = build_route_plan(task)
-    state.project_type = route.project_type.value
+    if mode == "business_task":
+        print("\nMODE: BUSINESS TASK")
+        return handle_business_task(task)
 
-    print(f"\n📊 PROJECT TYPE: {state.project_type}")
-    print("🧭 WORKFLOW:", [step.agent.value for step in route.tasks])
+    if mode == "build_project":
+        print("\nMODE: BUILD PROJECT")
+        return handle_build_project(task)
 
-    executor = Executor(AGENT_REGISTRY)
-    pipeline_error = None
+    if mode == "status_request":
+        print("\nMODE: STATUS REQUEST")
+        return handle_status_request()
 
-    try:
-        for step in route.tasks:
-            executor.run_agent(state, step.agent)
+    if mode == "edit_project":
+        return {
+            "ok": False,
+            "mode": "edit_project",
+            "error": "Режим edit_project ещё не подключён",
+        }
 
-        apply_generated_code(state)
+    if mode == "fix_project":
+        return {
+            "ok": False,
+            "mode": "fix_project",
+            "error": "Режим fix_project ещё не подключён",
+        }
 
-        run_result = auto_run_project(state)
-        state.auto_run_result = run_result
-
-        print("\n🚀 AUTO RUN RESULT:")
-        print(run_result)
-
-        print_user_result(run_result)
-
-    except ExecutionError as e:
-        pipeline_error = str(e)
-        print(f"\n⛔ PIPELINE STOPPED: {pipeline_error}")
-
-    except Exception as e:
-        pipeline_error = f"Unexpected error: {str(e)}"
-        print(f"\n💥 UNEXPECTED ERROR: {pipeline_error}")
-
-    snapshot = state.snapshot()
-
-    if pipeline_error:
-        snapshot["ok"] = False
-        snapshot["pipeline_error"] = pipeline_error
-    else:
-        snapshot["ok"] = True
-
-    print("\n🎯 FINAL STATE:")
-    print(snapshot)
-
-    return snapshot
+    return {
+        "ok": False,
+        "error": f"Неизвестный intent: {mode}",
+        "intent_result": intent_result,
+    }
 
 
 if __name__ == "__main__":
@@ -153,4 +160,4 @@ if __name__ == "__main__":
     else:
         result = run_system(user_task)
         print("\nFINAL RESULT:\n")
-        print(result)
+        print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -19,7 +19,7 @@ def architect_agent(context: dict) -> dict:
 
     try:
         response = client.chat.completions.create(
-            model=CHAT_MODEL,
+            model=STRONG_MODEL,
             messages=[
                 {"role": "system", "content": ARCHITECT_SYSTEM_PROMPT},
                 {
