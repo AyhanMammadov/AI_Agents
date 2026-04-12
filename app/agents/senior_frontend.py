@@ -7,6 +7,33 @@ from app.prompts.senior_frontend_prompt import SENIOR_FRONTEND_SYSTEM_PROMPT
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
+def _normalize_files(files):
+    if not isinstance(files, list) or not files:
+        return None
+
+    normalized = []
+
+    for item in files:
+        if not isinstance(item, dict):
+            return None
+
+        path = item.get("path")
+        content = item.get("content")
+
+        if not isinstance(path, str) or not path.strip():
+            return None
+
+        if not isinstance(content, str):
+            return None
+
+        normalized.append({
+            "path": path.replace("\\", "/").strip(),
+            "content": content,
+        })
+
+    return normalized
+
+
 def senior_frontend_agent(context: dict) -> dict:
     fallback = {
         "role": "senior_frontend",
@@ -40,9 +67,9 @@ def senior_frontend_agent(context: dict) -> dict:
 
         parsed = json.loads(result)
 
-        files = parsed.get("files", [])
-        if not isinstance(files, list):
-            fallback["error"] = "frontend agent returned invalid files format"
+        files = _normalize_files(parsed.get("files"))
+        if files is None:
+            fallback["error"] = "frontend agent returned invalid files[]"
             return fallback
 
         return {

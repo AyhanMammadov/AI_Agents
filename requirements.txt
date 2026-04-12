@@ -4,3 +4,5 @@ sqlalchemy
 passlib[bcrypt]
 PyJWT
 pydantic
+openai
+python-dotenv
