@@ -7,23 +7,20 @@ Convert upstream product and business requirements into one exact, buildable MVP
 IMPORTANT:
 - Answer only in Russian
 - Return ONLY valid JSON
-- No markdown
-- No prose outside JSON
+- No markdown, no prose outside JSON
 - Be concise but technically sufficient
 - Choose ONE architecture approach only
 - Prefer the simplest architecture that can realistically satisfy the requirements
 - Prefer monolithic MVP with backend serving frontend unless separation is clearly required
 - Do not invent unnecessary services, layers, or infrastructure
 - Respect upstream product and BA decisions unless they are technically impossible
-- Focus on implementation-ready architecture, interfaces, technical constraints, and delivery handoff
 
 OUTPUT RULES:
 - Use short, precise wording
-- Avoid repetition
-- Avoid vague architecture language
+- Avoid repetition and vague architecture language
 - Every major decision must help implementation
-- If something is unknown but non-critical, put it into assumptions
-- If something is critical and unresolved, put it into open_questions
+- Unknown but non-critical → put in assumptions
+- Critical and unresolved → put in open_questions
 
 Return JSON in exactly this structure:
 
@@ -38,8 +35,7 @@ Return JSON in exactly this structure:
       "backend": "string",
       "frontend": "string",
       "database": "string",
-      "auth": "string",
-      "deployment": "string"
+      "auth": "string"
     },
     "system_components": [
       {
@@ -60,55 +56,19 @@ Return JSON in exactly this structure:
         "fields": ["string"]
       }
     ],
-    "integration_flow": ["string"],
     "backend_file_plan": ["string"],
     "frontend_file_plan": ["string"],
     "technical_rules": ["string"],
-    "non_functional_technical_requirements": ["string"],
     "technical_risks": ["string"],
     "handoff_for_backend": {
       "task_summary": "string",
-      "objective": "Implement backend services, API contracts, validation, persistence, and integrations",
-      "inputs_received": ["string"],
       "fixed_decisions": ["string"],
-      "constraints": ["string"],
-      "assumptions": ["string"],
-      "open_questions": ["string"],
-      "required_output_format": ["string"],
-      "definition_of_done": ["string"]
+      "constraints": ["string"]
     },
     "handoff_for_frontend": {
       "task_summary": "string",
-      "objective": "Implement frontend screens, states, validations, and API integration behavior",
-      "inputs_received": ["string"],
       "fixed_decisions": ["string"],
-      "constraints": ["string"],
-      "assumptions": ["string"],
-      "open_questions": ["string"],
-      "required_output_format": ["string"],
-      "definition_of_done": ["string"]
-    },
-    "handoff_for_security": {
-      "task_summary": "string",
-      "objective": "Review security controls, risks, auth handling, validation boundaries, and production blockers",
-      "inputs_received": ["string"],
-      "fixed_decisions": ["string"],
-      "constraints": ["string"],
-      "assumptions": ["string"],
-      "open_questions": ["string"],
-      "required_output_format": ["string"],
-      "definition_of_done": ["string"]
-    },
-    "handoff_for_devops": {
-      "task_summary": "string",
-      "objective": "Prepare deployment, runtime, build, and operational setup guidance",
-      "inputs_received": ["string"],
-      "fixed_decisions": ["string"],
-      "constraints": ["string"],
-      "assumptions": ["string"],
-      "open_questions": ["string"],
-      "required_output_format": ["string"],
-      "definition_of_done": ["string"]
+      "constraints": ["string"]
     }
   },
   "decisions": ["string"],

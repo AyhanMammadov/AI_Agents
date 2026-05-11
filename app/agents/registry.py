@@ -8,12 +8,10 @@ from app.agents.senior_frontend import senior_frontend_agent
 from app.agents.qa import qa_agent
 
 
-def build_agent_context(state) -> dict:
+def build_agent_context(state, include_code: bool = False) -> dict:
     context = {
         "task": state.task,
-        "workspace": state.workspace,
         "project_type": state.project_type,
-        "available_artifacts": list(state.artifacts.keys()),
         "execution_mode": "normal",
     }
 
@@ -26,18 +24,16 @@ def build_agent_context(state) -> dict:
     if state.has_artifact("architecture"):
         context["architecture"] = state.get_artifact("architecture").data
 
-    if state.has_artifact("test_plan"):
-        context["test_plan"] = state.get_artifact("test_plan").data
+    if include_code:
+        if state.has_artifact("backend_code"):
+            backend_data = state.get_artifact("backend_code").data
+            context["previous_backend_result"] = backend_data
+            context["previous_backend_contract_errors"] = backend_data.get("contract_errors", [])
 
-    if state.has_artifact("backend_code"):
-        backend_data = state.get_artifact("backend_code").data
-        context["previous_backend_result"] = backend_data
-        context["previous_backend_contract_errors"] = backend_data.get("contract_errors", [])
-
-    if state.has_artifact("frontend_code"):
-        frontend_data = state.get_artifact("frontend_code").data
-        context["previous_frontend_result"] = frontend_data
-        context["previous_frontend_contract_errors"] = frontend_data.get("contract_errors", [])
+        if state.has_artifact("frontend_code"):
+            frontend_data = state.get_artifact("frontend_code").data
+            context["previous_frontend_result"] = frontend_data
+            context["previous_frontend_contract_errors"] = frontend_data.get("contract_errors", [])
 
     if hasattr(state, "backend_retry_feedback") and state.backend_retry_feedback:
         context["execution_mode"] = "retry"
@@ -114,7 +110,7 @@ def backend_wrapper(state):
 def frontend_wrapper(state):
     from app.core.frontend_contract import validate_frontend_artifact
 
-    context = build_agent_context(state)
+    context = build_agent_context(state, include_code=True)
     result = senior_frontend_agent(context)
 
     check = validate_frontend_artifact(result)

@@ -49,12 +49,18 @@ Important:
 def _extract_backend_input(state) -> dict:
     artifacts_dict = getattr(state, "artifacts", {}) or {}
 
-    return {
+    payload = {
         "task": state.task,
         "project_type": getattr(state, "project_type", None),
-        "artifacts": list(artifacts_dict.keys()),
         "backend_retry_feedback": getattr(state, "backend_retry_feedback", None),
     }
+
+    if "spec" in artifacts_dict:
+        payload["spec"] = artifacts_dict["spec"].data
+    if "architecture" in artifacts_dict:
+        payload["architecture"] = artifacts_dict["architecture"].data
+
+    return payload
 
 
 def _validate_backend_result(result: dict) -> tuple[bool, list[str]]:
@@ -126,7 +132,7 @@ def senior_backend_agent(state) -> dict:
                 {"role": "system", "content": BACKEND_SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": json.dumps(payload, ensure_ascii=False, indent=2),
+                    "content": json.dumps(payload, ensure_ascii=False),
                 },
             ],
             temperature=0.2,

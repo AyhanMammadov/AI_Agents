@@ -1,7 +1,7 @@
 import json
 from openai import OpenAI
 
-from app.config import OPENAI_API_KEY, CHAT_MODEL
+from app.config import OPENAI_API_KEY, STRONG_MODEL
 from app.prompts.senior_frontend_prompt import SENIOR_FRONTEND_SYSTEM_PROMPT
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -52,7 +52,7 @@ def senior_frontend_agent(context: dict) -> dict:
                 {"role": "system", "content": SENIOR_FRONTEND_SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": json.dumps(context, ensure_ascii=False, indent=2),
+                    "content": json.dumps(context, ensure_ascii=False),
                 },
             ],
             temperature=0,
