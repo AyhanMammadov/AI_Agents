@@ -24,10 +24,9 @@ def devops_agent(context: dict) -> dict:
             model=CHAT_MODEL,
             messages=[
                 {"role": "system", "content": DEVOPS_SYSTEM_PROMPT},
-                {"role": "system", "content": DEVOPS_REFERENCE},
                 {
                     "role": "user",
-                    "content": json.dumps(context, ensure_ascii=False, indent=2),
+                    "content": json.dumps(context, ensure_ascii=False),
                 },
             ],
             temperature=0,

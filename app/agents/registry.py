@@ -5,7 +5,12 @@ from app.agents.business_analyst import business_analyst_agent
 from app.agents.architect import architect_agent
 from app.agents.senior_backend import senior_backend_agent
 from app.agents.senior_frontend import senior_frontend_agent
+from app.agents.cx import cx_agent
+from app.agents.ux_ui import ux_ui_agent
+from app.agents.security import security_agent
 from app.agents.qa import qa_agent
+from app.agents.devops import devops_agent
+from app.agents.code_reviewer import code_reviewer_agent
 
 
 def build_agent_context(state, include_code: bool = False) -> dict:
@@ -15,25 +20,17 @@ def build_agent_context(state, include_code: bool = False) -> dict:
         "execution_mode": "normal",
     }
 
-    if state.has_artifact("brief"):
-        context["brief"] = state.get_artifact("brief").data
+    # Pass accumulated knowledge artifacts in execution order
+    for ref in ["brief", "spec", "architecture", "cx_review", "ux_ui_spec", "test_plan"]:
+        if state.has_artifact(ref):
+            context[ref] = state.get_artifact(ref).data
 
-    if state.has_artifact("spec"):
-        context["spec"] = state.get_artifact("spec").data
-
-    if state.has_artifact("architecture"):
-        context["architecture"] = state.get_artifact("architecture").data
-
+    # Code artifacts only for agents that need to read/review them
     if include_code:
         if state.has_artifact("backend_code"):
-            backend_data = state.get_artifact("backend_code").data
-            context["previous_backend_result"] = backend_data
-            context["previous_backend_contract_errors"] = backend_data.get("contract_errors", [])
-
+            context["backend_code"] = state.get_artifact("backend_code").data
         if state.has_artifact("frontend_code"):
-            frontend_data = state.get_artifact("frontend_code").data
-            context["previous_frontend_result"] = frontend_data
-            context["previous_frontend_contract_errors"] = frontend_data.get("contract_errors", [])
+            context["frontend_code"] = state.get_artifact("frontend_code").data
 
     if hasattr(state, "backend_retry_feedback") and state.backend_retry_feedback:
         context["execution_mode"] = "retry"
@@ -46,44 +43,46 @@ def build_agent_context(state, include_code: bool = False) -> dict:
     return context
 
 
+# ─── Planning & Analysis agents ───────────────────────────────────────────────
+
 def planner_wrapper(state):
     result = product_owner_agent(build_agent_context(state))
-    return Artifact(
-        ref="brief",
-        kind="task_brief",
-        data=result,
-    )
+    return Artifact(ref="brief", kind="task_brief", data=result)
 
 
 def spec_wrapper(state):
     result = business_analyst_agent(build_agent_context(state))
-    return Artifact(
-        ref="spec",
-        kind="spec",
-        data=result,
-    )
+    return Artifact(ref="spec", kind="spec", data=result)
 
 
 def architect_wrapper(state):
     result = architect_agent(build_agent_context(state))
-    return Artifact(
-        ref="architecture",
-        kind="architecture",
-        data=result,
-    )
+    return Artifact(ref="architecture", kind="architecture", data=result)
 
+
+# ─── Experience agents ────────────────────────────────────────────────────────
+
+def cx_wrapper(state):
+    result = cx_agent(build_agent_context(state))
+    return Artifact(ref="cx_review", kind="cx_review", data=result)
+
+
+def ux_ui_wrapper(state):
+    result = ux_ui_agent(build_agent_context(state))
+    return Artifact(ref="ux_ui_spec", kind="ux_ui_spec", data=result)
+
+
+# ─── Delivery agents ──────────────────────────────────────────────────────────
 
 def backend_wrapper(state):
     from app.core.backend_contract import validate_backend_artifact
 
     result = senior_backend_agent(state)
-
     check = validate_backend_artifact(result)
 
     if not check["ok"]:
         print("\n❌ BACKEND CONTRACT FAILED")
         print(check["errors"])
-
         result = {
             "role": result.get("role", "senior_backend") if isinstance(result, dict) else "senior_backend",
             "deliverables": result.get("deliverables", {}) if isinstance(result, dict) else {},
@@ -100,11 +99,7 @@ def backend_wrapper(state):
         result["contract_ok"] = True
         result["contract_errors"] = []
 
-    return Artifact(
-        ref="backend_code",
-        kind="backend_code",
-        data=result,
-    )
+    return Artifact(ref="backend_code", kind="backend_code", data=result)
 
 
 def frontend_wrapper(state):
@@ -118,7 +113,6 @@ def frontend_wrapper(state):
     if not check["ok"]:
         print("\n❌ FRONTEND CONTRACT FAILED")
         print(check["errors"])
-
         result = {
             "role": result.get("role", "senior_frontend") if isinstance(result, dict) else "senior_frontend",
             "deliverables": result.get("deliverables", {}) if isinstance(result, dict) else {},
@@ -135,21 +129,32 @@ def frontend_wrapper(state):
         result["contract_ok"] = True
         result["contract_errors"] = []
 
-    return Artifact(
-        ref="frontend_code",
-        kind="frontend_code",
-        data=result,
-    )
+    return Artifact(ref="frontend_code", kind="frontend_code", data=result)
 
+
+# ─── Validation & hardening agents ────────────────────────────────────────────
 
 def qa_wrapper(state):
     result = qa_agent(build_agent_context(state))
-    return Artifact(
-        ref="test_plan",
-        kind="test_plan",
-        data=result,
-    )
+    return Artifact(ref="test_plan", kind="test_plan", data=result)
 
+
+def security_wrapper(state):
+    result = security_agent(build_agent_context(state, include_code=True))
+    return Artifact(ref="security_review", kind="security_review", data=result)
+
+
+def code_reviewer_wrapper(state):
+    result = code_reviewer_agent(build_agent_context(state, include_code=True))
+    return Artifact(ref="code_review", kind="code_review", data=result)
+
+
+def devops_wrapper(state):
+    result = devops_agent(build_agent_context(state, include_code=True))
+    return Artifact(ref="devops_config", kind="devops_config", data=result)
+
+
+# ─── Pipeline tail (no LLM calls) ─────────────────────────────────────────────
 
 def validator_wrapper(state):
     checks_passed = []
@@ -188,7 +193,6 @@ def validator_wrapper(state):
             "checks_passed": checks_passed,
             "checks_failed": checks_failed,
             "errors": errors,
-            "message": "validator completed",
         },
     )
 
@@ -206,7 +210,7 @@ def deploy_wrapper(state):
             "url": None,
             "logs": [],
             "errors": validation_data.get("errors", []),
-            "message": "temporary deploy stub",
+            "message": "deploy stub — not yet implemented",
         },
     )
 
@@ -215,9 +219,14 @@ AGENT_REGISTRY = {
     AgentName.PLANNER: planner_wrapper,
     AgentName.SPEC: spec_wrapper,
     AgentName.ARCHITECT: architect_wrapper,
+    AgentName.CX: cx_wrapper,
+    AgentName.UX_UI: ux_ui_wrapper,
     AgentName.BACKEND: backend_wrapper,
     AgentName.FRONTEND: frontend_wrapper,
+    AgentName.SECURITY: security_wrapper,
     AgentName.QA: qa_wrapper,
+    AgentName.CODE_REVIEWER: code_reviewer_wrapper,
+    AgentName.DEVOPS: devops_wrapper,
     AgentName.VALIDATOR: validator_wrapper,
     AgentName.DEPLOY: deploy_wrapper,
 }

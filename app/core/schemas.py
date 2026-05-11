@@ -21,13 +21,18 @@ class ProjectType(str, Enum):
 # =========================
 
 class AgentName(str, Enum):
-    PLANNER = "planner"
-    SPEC = "spec"
+    PLANNER = "product_owner"
+    SPEC = "business_analyst"
     ARCHITECT = "architect"
-    FRONTEND = "frontend"
-    BACKEND = "backend"
-    MOBILE = "mobile"
+    BACKEND = "senior_backend"
+    FRONTEND = "senior_frontend"
+    CX = "cx"
+    UX_UI = "ux_ui"
+    SECURITY = "security"
     QA = "qa"
+    DEVOPS = "devops"
+    CODE_REVIEWER = "code_reviewer"
+    MOBILE = "mobile"
     FIX = "fix"
     VALIDATOR = "validator"
     DEPLOY = "deploy"
