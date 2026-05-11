@@ -5,6 +5,7 @@ from openai import OpenAI
 
 from app.config import OPENAI_API_KEY, CHAT_MODEL
 from app.agents.intent_router import ai_intent_router
+from app.core.pre_router import detect_fast_intent
 from app.orchestrator import run_orchestrator
 from app.core.session_store import save_last_result, get_last_result
 
@@ -101,10 +102,14 @@ def run_system(task: str) -> dict[str, Any]:
     print("\nSTART SYSTEM")
     print(f"Task: {task}")
 
-    intent_result = ai_intent_router(task)
-
-    print("\nINTENT ROUTER:")
-    print(intent_result)
+    fast_intent = detect_fast_intent(task)
+    if fast_intent:
+        intent_result = {"intent": fast_intent}
+        print(f"\nINTENT ROUTER (fast): {fast_intent}")
+    else:
+        intent_result = ai_intent_router(task)
+        print("\nINTENT ROUTER (llm):")
+        print(intent_result)
 
     if intent_result.get("error"):
         return {

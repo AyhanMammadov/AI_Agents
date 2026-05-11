@@ -42,7 +42,7 @@ class BaseAgent:
                     {"role": "system", "content": self.system_prompt},
                     {
                         "role": "user",
-                        "content": json.dumps(context, ensure_ascii=False, indent=2),
+                        "content": json.dumps(context, ensure_ascii=False),
                     },
                 ],
                 temperature=0.2,

@@ -31,24 +31,32 @@ def build_route_plan(task: str) -> RoutePlan:
     ]
 
     backend_phrases = [
-        "fastapi", "backend service",
+        "fastapi", "backend service", "rest api", "crud app", "crud api",
     ]
     backend_tokens = [
         "backend", "api", "server", "auth", "database", "endpoint", "service",
+        "crud", "authentication", "authorization",
     ]
 
     frontend_phrases = [
-        "frontend", "dashboard", "react", "vite",
+        "frontend", "dashboard", "react", "vite", "landing page", "web app",
+        "web application",
     ]
     frontend_tokens = [
-        "ui", "web", "page", "form", "screen",
+        "ui", "web", "page", "form", "screen", "website", "portal", "interface",
+    ]
+
+    fullstack_phrases = [
+        "fullstack", "full stack", "full-stack",
+        "with frontend", "with ui", "with dashboard",
+        "и фронтенд", "с фронтендом", "с интерфейсом",
     ]
 
     is_mobile = contains_phrase(task_lower, mobile_phrases) or contains_token(task_lower, mobile_tokens)
     is_backend = contains_phrase(task_lower, backend_phrases) or contains_token(task_lower, backend_tokens)
     is_frontend = contains_phrase(task_lower, frontend_phrases) or contains_token(task_lower, frontend_tokens)
 
-    is_fullstack_explicit = "fullstack" in task_lower
+    is_fullstack_explicit = contains_phrase(task_lower, fullstack_phrases)
     is_telegram_bot = "telegram" in task_lower and "bot" in task_lower
 
     # =========================
