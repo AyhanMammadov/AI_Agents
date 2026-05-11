@@ -16,8 +16,8 @@ from app.prompts.orchestrator_prompt import ORCHESTRATOR_SYSTEM_PROMPT
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Always appended at the end of every pipeline (no LLM call, just contract checks)
-_PIPELINE_TAIL = [AgentName.VALIDATOR, AgentName.DEPLOY]
+# Validator checks contracts (no LLM). Deploy happens after code is written — see below.
+_PIPELINE_TAIL = [AgentName.VALIDATOR]
 
 # All valid agent name values
 _AGENT_BY_NAME = {e.value: e for e in AgentName}
@@ -83,14 +83,25 @@ def run_orchestrator(task: str) -> dict:
             executor.run_agent(state, agent_name)
 
         apply_generated_code(state)
+
+        # Deploy = actually start the project (after code is on disk)
+        print("\n🚀 DEPLOYING...")
         run_result = auto_run_project(state)
         state.auto_run_result = run_result
+
+        if run_result.get("ok"):
+            backend_url = (run_result.get("backend") or {}).get("url")
+            frontend_url = (run_result.get("frontend") or {}).get("url")
+            print(f"✅ DEPLOY OK — backend={backend_url} frontend={frontend_url}")
+        else:
+            print(f"⚠️ DEPLOY ISSUES: {run_result.get('errors', [])}")
 
     except ExecutionError as e:
         pipeline_error = str(e)
     except Exception as e:
         pipeline_error = f"Unexpected error: {str(e)}"
 
+    auto_run = getattr(state, "auto_run_result", None) or {}
     result = {
         "ok": pipeline_error is None,
         "task": state.task,
@@ -99,8 +110,15 @@ def run_orchestrator(task: str) -> dict:
         "artifacts": list(state.artifacts.keys()),
         "history": state.run_history,
         "snapshot": state.snapshot(),
-        "auto_run_result": getattr(state, "auto_run_result", None),
+        "auto_run_result": auto_run,
         "pipeline": [a.value for a in agent_sequence],
+        "deploy": {
+            "ok": auto_run.get("ok", False),
+            "backend_url": (auto_run.get("backend") or {}).get("url"),
+            "frontend_url": (auto_run.get("frontend") or {}).get("url"),
+            "health_url": (auto_run.get("health") or {}).get("body") and (auto_run.get("backend") or {}).get("health_url"),
+            "errors": auto_run.get("errors", []),
+        },
     }
 
     if pipeline_error:
