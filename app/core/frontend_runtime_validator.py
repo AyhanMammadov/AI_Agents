@@ -1,10 +1,13 @@
 import subprocess
+import sys
+
+_NPM = ["npm.cmd"] if sys.platform == "win32" else ["npm"]
 
 
 def validate_frontend_runtime(frontend_path: str) -> dict:
     try:
         install_result = subprocess.run(
-            ["cmd", "/c", "npm", "install"],
+            [*_NPM, "install"],
             cwd=frontend_path,
             capture_output=True,
             text=True,
@@ -23,7 +26,7 @@ def validate_frontend_runtime(frontend_path: str) -> dict:
             }
 
         build_result = subprocess.run(
-            ["cmd", "/c", "npm", "run", "build"],
+            [*_NPM, "run", "build"],
             cwd=frontend_path,
             capture_output=True,
             text=True,

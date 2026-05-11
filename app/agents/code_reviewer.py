@@ -24,7 +24,7 @@ def code_reviewer_agent(context: dict) -> dict:
                 {"role": "system", "content": CODE_REVIEWER_SYSTEM_PROMPT},
                 {
                     "role": "user",
-                    "content": json.dumps(context, ensure_ascii=False, indent=2),
+                    "content": json.dumps(context, ensure_ascii=False),
                 },
             ],
             temperature=0.1,

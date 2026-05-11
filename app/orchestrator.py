@@ -1,55 +1,107 @@
+import json
 import os
 import re
 from datetime import datetime
 
-from app.core.router import build_route_plan
+from openai import OpenAI
+
+from app.config import OPENAI_API_KEY, CHAT_MODEL
+from app.core.schemas import AgentName
 from app.core.state_store import ProjectState
 from app.core.executor import Executor, ExecutionError
 from app.core.runtime import apply_generated_code
 from app.core.auto_run import auto_run_project
 from app.agents.registry import AGENT_REGISTRY
+from app.prompts.orchestrator_prompt import ORCHESTRATOR_SYSTEM_PROMPT
+
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Validator checks contracts (no LLM). Deploy happens after code is written — see below.
+_PIPELINE_TAIL = [AgentName.VALIDATOR]
+
+# All valid agent name values
+_AGENT_BY_NAME = {e.value: e for e in AgentName}
+
+
+def _get_agent_pipeline(task: str) -> dict:
+    """Ask LLM which agents to run and what project type."""
+    try:
+        response = client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": ORCHESTRATOR_SYSTEM_PROMPT},
+                {"role": "user", "content": task},
+            ],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"\n⚠️ ORCHESTRATOR LLM FAILED: {e} — using fallback pipeline")
+        return {
+            "project_type": "backend",
+            "workflow": ["product_owner", "business_analyst", "architect", "senior_backend", "qa"],
+        }
+
+
+def _resolve_workflow(workflow: list) -> list:
+    """Convert string agent names to AgentName enum instances, skip unknowns and tail agents."""
+    tail_set = set(_PIPELINE_TAIL)
+    resolved = []
+    for name in workflow:
+        agent = _AGENT_BY_NAME.get(name)
+        if agent and agent not in tail_set and agent not in resolved:
+            resolved.append(agent)
+    return resolved + _PIPELINE_TAIL
 
 
 def create_workspace(task: str) -> str:
     safe_name = re.sub(r"[^a-zA-Z0-9]+", "_", task.lower()).strip("_")
     safe_name = safe_name[:40] if safe_name else "project"
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     workspace = os.path.join("workspaces", f"{safe_name}_{timestamp}")
-
     os.makedirs(workspace, exist_ok=True)
     return workspace
 
 
 def run_orchestrator(task: str) -> dict:
     workspace = create_workspace(task)
+    state = ProjectState(task=task, workspace=workspace)
 
-    state = ProjectState(
-        task=task,
-        workspace=workspace,
-    )
+    orchestration = _get_agent_pipeline(task)
+    state.project_type = orchestration.get("project_type", "backend")
+    agent_sequence = _resolve_workflow(orchestration.get("workflow", []))
 
-    route_plan = build_route_plan(task)
-    state.project_type = route_plan.project_type.value
+    print(f"\nPIPELINE: project_type={state.project_type}")
+    print(f"Agents: {[a.value for a in agent_sequence]}")
 
     executor = Executor(AGENT_REGISTRY)
     pipeline_error = None
 
     try:
-        for agent_task in route_plan.tasks:
-            executor.run_agent(state, agent_task.agent)
+        for agent_name in agent_sequence:
+            executor.run_agent(state, agent_name)
 
         apply_generated_code(state)
 
+        # Deploy = actually start the project (after code is on disk)
+        print("\n🚀 DEPLOYING...")
         run_result = auto_run_project(state)
         state.auto_run_result = run_result
 
+        if run_result.get("ok"):
+            backend_url = (run_result.get("backend") or {}).get("url")
+            frontend_url = (run_result.get("frontend") or {}).get("url")
+            print(f"✅ DEPLOY OK — backend={backend_url} frontend={frontend_url}")
+        else:
+            print(f"⚠️ DEPLOY ISSUES: {run_result.get('errors', [])}")
+
     except ExecutionError as e:
         pipeline_error = str(e)
-
     except Exception as e:
         pipeline_error = f"Unexpected error: {str(e)}"
 
+    auto_run = getattr(state, "auto_run_result", None) or {}
     result = {
         "ok": pipeline_error is None,
         "task": state.task,
@@ -58,7 +110,15 @@ def run_orchestrator(task: str) -> dict:
         "artifacts": list(state.artifacts.keys()),
         "history": state.run_history,
         "snapshot": state.snapshot(),
-        "auto_run_result": getattr(state, "auto_run_result", None),
+        "auto_run_result": auto_run,
+        "pipeline": [a.value for a in agent_sequence],
+        "deploy": {
+            "ok": auto_run.get("ok", False),
+            "backend_url": (auto_run.get("backend") or {}).get("url"),
+            "frontend_url": (auto_run.get("frontend") or {}).get("url"),
+            "health_url": (auto_run.get("health") or {}).get("body") and (auto_run.get("backend") or {}).get("health_url"),
+            "errors": auto_run.get("errors", []),
+        },
     }
 
     if pipeline_error:
