@@ -127,6 +127,23 @@ class Executor:
             print("\n✅ FRONTEND CONTRACT FIXED AFTER RETRY")
             return retry_result
 
+        if state.project_type == "mobile_web_demo":
+            from app.core.frontend_fallback import build_mobile_web_demo_fallback
+
+            print("\n⚠️ USING MOBILE WEB DEMO FALLBACK AFTER FRONTEND CONTRACT RETRY FAILED")
+            fallback_data = build_mobile_web_demo_fallback(
+                state.task,
+                f"contract retry failed: {retry_data.get('contract_errors', [])}",
+            )
+            fallback_artifact = Artifact(
+                ref="frontend_code",
+                kind="frontend_code",
+                data=fallback_data,
+            )
+            state.add_artifact(fallback_artifact)
+            state.log_step(agent_name.value + "_fallback", fallback_artifact.ref)
+            return fallback_artifact
+
         print("\n⛔ PIPELINE STOPPED: FRONTEND CONTRACT FAILED AFTER RETRY")
         print(retry_data.get("contract_errors", []))
         raise ExecutionError(

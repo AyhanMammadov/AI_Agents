@@ -6,6 +6,7 @@ from openai import OpenAI
 from app.config import OPENAI_API_KEY, CHAT_MODEL
 from app.agents.intent_router import ai_intent_router
 from app.core.pre_router import detect_fast_intent
+from app.core.token_usage import get_token_usage, record_openai_usage, reset_token_usage
 from app.orchestrator import run_orchestrator
 from app.core.session_store import save_last_result, get_last_result
 
@@ -21,6 +22,7 @@ def _chat_answer(system_prompt: str, user_text: str) -> str:
         ],
         temperature=0.2,
     )
+    record_openai_usage(response, "chat_answer", CHAT_MODEL)
     return (response.choices[0].message.content or "").strip()
 
 
@@ -92,6 +94,7 @@ def handle_status_request() -> dict[str, Any]:
 
 def run_system(task: str) -> dict[str, Any]:
     task = task.strip()
+    reset_token_usage()
 
     if not task:
         return {
@@ -122,19 +125,27 @@ def run_system(task: str) -> dict[str, Any]:
 
     if mode == "simple_answer":
         print("\nMODE: SIMPLE ANSWER")
-        return handle_simple_answer(task)
+        result = handle_simple_answer(task)
+        result["token_usage"] = get_token_usage()
+        return result
 
     if mode == "business_task":
         print("\nMODE: BUSINESS TASK")
-        return handle_business_task(task)
+        result = handle_business_task(task)
+        result["token_usage"] = get_token_usage()
+        return result
 
     if mode == "build_project":
         print("\nMODE: BUILD PROJECT")
-        return handle_build_project(task)
+        result = handle_build_project(task)
+        result["token_usage"] = get_token_usage()
+        return result
 
     if mode == "status_request":
         print("\nMODE: STATUS REQUEST")
-        return handle_status_request()
+        result = handle_status_request()
+        result["token_usage"] = get_token_usage()
+        return result
 
     if mode == "edit_project":
         return {

@@ -173,7 +173,7 @@ def validator_wrapper(state):
             checks_failed.append("backend_artifact_exists")
             errors.append("backend_code artifact missing")
 
-    if state.project_type in ["frontend", "fullstack"]:
+    if state.project_type in ["frontend", "fullstack", "mobile_web_demo"]:
         if state.has_artifact("frontend_code"):
             frontend_data = state.get_artifact("frontend_code").data
             if frontend_data.get("contract_ok"):

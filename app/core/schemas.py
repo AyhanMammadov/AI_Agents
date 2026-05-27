@@ -12,6 +12,7 @@ class ProjectType(str, Enum):
     BACKEND = "backend"
     FULLSTACK = "fullstack"
     TELEGRAM_BOT = "telegram_bot"
+    MOBILE_WEB_DEMO = "mobile_web_demo"
     MOBILE_EXPO = "mobile_expo"
     MOBILE_FLUTTER = "mobile_flutter"
 

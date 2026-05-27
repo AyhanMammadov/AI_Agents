@@ -24,6 +24,13 @@ def _wait_for_port(port: int, timeout: int = 20, host: str = "127.0.0.1") -> boo
     return False
 
 
+def _find_free_port(start: int, host: str = "127.0.0.1", attempts: int = 50) -> int:
+    for port in range(start, start + attempts):
+        if not _is_port_open(port, host):
+            return port
+    return start
+
+
 def start_backend(backend_path: str, port: int = 8000) -> dict:
     logs_dir = Path(backend_path) / ".logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -72,6 +79,7 @@ def start_backend(backend_path: str, port: int = 8000) -> dict:
 
 
 def start_frontend(frontend_path: str, port: int = 5173) -> dict:
+    port = _find_free_port(port)
     logs_dir = Path(frontend_path) / ".logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 

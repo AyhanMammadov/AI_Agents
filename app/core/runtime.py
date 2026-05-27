@@ -1,14 +1,46 @@
 import os
+from pathlib import Path
+
 from app.core.state_store import ProjectState
+
+
+def _safe_file_path(base_path: str, relative_path: str) -> Path:
+    base = Path(base_path).resolve()
+    target = (base / relative_path).resolve()
+    if base != target and base not in target.parents:
+        raise ValueError(f"Unsafe generated file path: {relative_path}")
+    return target
 
 
 def write_files(base_path: str, files: list):
     for file in files:
-        file_path = os.path.join(base_path, file["path"])
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        file_path = _safe_file_path(base_path, file["path"])
+        os.makedirs(file_path.parent, exist_ok=True)
 
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(file["content"])
+
+
+def ensure_frontend_railway_files(frontend_path: str):
+    railway_path = _safe_file_path(frontend_path, "railway.json")
+    if railway_path.exists():
+        return
+
+    railway_path.write_text(
+        """{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "npm run preview -- --host 0.0.0.0 --port $PORT",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
+""",
+        encoding="utf-8",
+    )
 
 
 def apply_generated_code(state: ProjectState):
@@ -38,6 +70,7 @@ def apply_generated_code(state: ProjectState):
             os.makedirs(frontend_path, exist_ok=True)
 
             write_files(frontend_path, frontend_files)
+            ensure_frontend_railway_files(frontend_path)
 
     if state.has_artifact("mobile_code"):
         mobile_artifact = state.get_artifact("mobile_code")

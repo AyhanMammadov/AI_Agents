@@ -2,6 +2,7 @@ import json
 from openai import OpenAI
 
 from app.config import OPENAI_API_KEY, CHAT_MODEL
+from app.core.token_usage import record_openai_usage
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -48,6 +49,7 @@ class BaseAgent:
                 temperature=0.2,
                 response_format={"type": "json_object"},
             )
+            record_openai_usage(response, self.name, CHAT_MODEL)
 
             content = response.choices[0].message.content
 

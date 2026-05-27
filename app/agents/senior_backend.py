@@ -2,6 +2,7 @@ import json
 from openai import OpenAI
 
 from app.config import OPENAI_API_KEY, STRONG_MODEL
+from app.core.token_usage import record_openai_usage
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -138,6 +139,7 @@ def senior_backend_agent(state) -> dict:
             temperature=0.2,
             response_format={"type": "json_object"},
         )
+        record_openai_usage(response, "senior_backend", STRONG_MODEL)
 
         raw = response.choices[0].message.content
         parsed = json.loads(raw)

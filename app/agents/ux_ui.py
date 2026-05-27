@@ -2,6 +2,7 @@ import json
 from openai import OpenAI
 
 from app.config import OPENAI_API_KEY, CHAT_MODEL
+from app.core.token_usage import record_openai_usage
 from app.prompts.ux_ui_prompt import UX_UI_SYSTEM_PROMPT
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -30,6 +31,7 @@ def ux_ui_agent(context: dict) -> dict:
             temperature=0.1,
             response_format={"type": "json_object"},
         )
+        record_openai_usage(response, "ux_ui", CHAT_MODEL)
 
         result = response.choices[0].message.content
 

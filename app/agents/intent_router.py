@@ -1,7 +1,8 @@
 import json
 from openai import OpenAI
 
-from app.config import OPENAI_API_KEY, CHAT_MODEL
+from app.config import OPENAI_API_KEY, CHEAP_MODEL
+from app.core.token_usage import record_openai_usage
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -86,7 +87,7 @@ INTENT_ROUTER_SYSTEM_PROMPT = """
 def ai_intent_router(task: str) -> dict:
     try:
         response = client.chat.completions.create(
-            model=CHAT_MODEL,
+            model=CHEAP_MODEL,
             messages=[
                 {"role": "system", "content": INTENT_ROUTER_SYSTEM_PROMPT},
                 {"role": "user", "content": task},
@@ -94,6 +95,7 @@ def ai_intent_router(task: str) -> dict:
             temperature=0,
             response_format={"type": "json_object"},
         )
+        record_openai_usage(response, "intent_router", CHEAP_MODEL)
 
         raw = response.choices[0].message.content
         parsed = json.loads(raw)
